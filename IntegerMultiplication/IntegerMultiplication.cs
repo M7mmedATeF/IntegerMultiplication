@@ -23,148 +23,226 @@ namespace Problem
         /// <param name="Y">Second large integer of N digits [0: least significant digit, N-1: most signif. dig.]</param>
         /// <param name="N">Number of digits (power of 2)</param>
         /// <returns>Resulting large integer of 2xN digits (left padded with 0's if necessarily) [0: least signif., 2xN-1: most signif.]</returns>
-        /// num1 => B*D
-        /// num2 => A*C
-        /// Z    => (A+B) * (C+D) - (num1 + num2)
         static public byte[] IntegerMultiply(byte[] X, byte[] Y, int N)
         {
-            byte[] returnVal;
-            if (N == 1)
+            if (Y.Length > X.Length)
             {
-                return multiplyOneElementArray(X, Y);
+                if (Y.Length % 2 == 0)
+                    N = Y.Length;
+                else
+                    N = Y.Length + 1;
+            }
+            else
+            {
+                if (X.Length % 2 == 0)
+                    N = X.Length;
+                else
+                    N = X.Length + 1;
+            }
+            X = paddingLeftByZero(X, N);
+            Y = paddingLeftByZero(Y, N);
+
+            byte[] returnVal;
+            if (N < 10)
+            {
+                returnVal = multiplyOneElementArray(parseULONG(X), parseULONG(Y));
+                return returnVal;
             }
 
             // SubArrays
-            byte[] A = new byte[N / 2];
-            byte[] B = new byte[N / 2];
-            byte[] C = new byte[N / 2];
-            byte[] D = new byte[N / 2];
+            int Mx = (X.Length % 2 == 1) ? X.Length / 2 + 1: X.Length / 2;
+            int My = (Y.Length % 2 == 1) ? Y.Length / 2 + 1: Y.Length / 2;
+            byte[] A = splitArray(X, 0, Mx);
+            byte[] B = splitArray(X, Mx, N);
+            byte[] C = splitArray(Y, 0, My);
+            byte[] D = splitArray(Y, My, N);
 
-            // split Array
-            for (int i = 0; i < N / 2; i++)
-            {
-                int scPart = N / 2 + i;
-                A[i] = X[scPart];
-                B[i] = X[i];
-                C[i] = Y[scPart];
-                D[i] = Y[i];
-            }
+            byte[] AC = IntegerMultiply(A, C, N / 2);
+            byte[] BD = IntegerMultiply(B, D, N / 2);
 
-            // Calc num1 => BD
-            byte[] num1 = IntegerMultiply(B, D, N / 2);
+            byte[] ApB = sum(A, B);
+            byte[] CpD = sum(C, D);
 
-            // Calc num2 => AC
-            byte[] num2 = IntegerMultiply(A, C, N / 2);
+            byte[] Z = IntegerMultiply(ApB, CpD, ApB.Length);
 
-            // Calc Z
-            byte[] AplusB = sum(A, B);
-            byte[] CplusD = sum(C, D);
-            byte[] Z = IntegerMultiply(AplusB, CplusD, AplusB.Length);
+            byte[] ACpBD = sum(AC, BD);
 
-            // Release From Memory
-            A = B = C = D = AplusB = CplusD = null;
+            Z = sub(Z, ACpBD);
 
-            byte[] ACplusBD = sum(num2, num1);
-            Z = sub(Z, ACplusBD, Z.Length);
+            byte[] M1 = paddingRightByZero(BD, N);
+            byte[] M2 = paddingRightByZero(Z, N/2);
 
-            byte[] arr1 = multiplyByPowerdTen(num1, num1.Length, N);
-            byte[] arr2 = multiplyByPowerdTen(Z, Z.Length, N/2);
-            returnVal = (arr1.Length > arr2.Length) ? sum(arr1, arr2) : sum(arr2, arr1);
-            returnVal = (returnVal.Length > num2.Length) ? sum(returnVal, num2) : sum(num2, returnVal);
+            returnVal = sum(M1, M2);
 
+            returnVal = sum(returnVal, AC);
+
+            returnVal = removeUnwantedZeros(returnVal);
             return returnVal;
         }
         #endregion
 
-        static private byte[] sum(byte[] X, byte[] Y)
+        static private byte[] removeUnwantedZeros(byte[] array)
         {
-            int N = X.Length;
-            byte[] temp = new byte[N+2];
-            byte reminder = 0;
-            for(int i=N-1; i >= 0 ; i--)
+            int zeros = 0;
+            for(int i= array.Length-1; i > 0; i--)
             {
-                int lessINDX = i - N + Y.Length;
-                if(lessINDX >= 0)
-                {
-                    int sumTemp = X[i] + Y[lessINDX] + reminder;
-                    if (sumTemp > 9)
-                    {
-                        reminder = (byte)(sumTemp / 10);
-                    }
-                    temp[i] = (byte)(sumTemp % 10);
-                }
+                if (array[i] == 0)
+                    zeros++;
                 else
-                {
-                    temp[i] = (byte)(X[i] + reminder);
-                    reminder -= reminder;
-                }
+                    break;
+            }
+            byte[] temp = new byte[array.Length - zeros];
+
+            for(int i = 0; i< temp.Length; i++)
+            {
+                temp[i] = array[i];
+            }
+
+            return temp;
+        }
+
+        static private byte[] newArray(byte[] A)
+        {
+            byte[] temp = new byte[A.Length];
+            for (int i = 0; i < A.Length; i++)
+            {
+                temp[i] = A[i];
             }
             return temp;
         }
 
-        static private byte[] sub(byte[] X, byte[] Y, int N)
+        static private byte[] sub(byte[] A, byte[] B)
         {
-            byte[] temp = new byte[N];
-            bool isNegative = false;
-            if (Y[0] < 0)
-                isNegative = true;
-            for (int i = N - 1; i >= 0; i--)
-            {
-                int lessINDX = Y.Length - i;
-                if(lessINDX >= 0)
-                {
-                    int subTemp;
-                    if (isNegative)
-                        subTemp = X[i] + Y[lessINDX];
-                    else
-                        subTemp = X[i] - Y[lessINDX];
+            A = newArray(A);
+            A = paddingLeftByZero(A, B.Length);
+            B = paddingLeftByZero(B, A.Length);
 
-                    if (subTemp < 0 && i != 0)
+            byte[] temp = new byte[A.Length];
+            for (int i = 0; i < A.Length; i++)
+            {
+                int sub = A[i] - B[i];
+                if (sub < 0)
+                {
+                    int j = i+1;
+                    while (j < A.Length)
                     {
-                        subTemp += 10;
-                        X[i - 1] -= 1;
+                        if (A[j] == 0)
+                        {
+                            A[j] += 9;
+                        }
+                        else
+                        {
+                            A[j] -= 1;
+                            break;
+                        }
+                        j++;
                     }
-                    temp[i] = (byte)(subTemp);
+                    sub += 10;
                 }
+                temp[i] = (byte)(sub);
+            }
+
+            temp = removeUnwantedZeros(temp);
+            //Console.Write("Return sub" + level + " : ");
+            //Problem.PrintNum(temp);
+            return temp;
+        }
+
+        static private byte[] paddingRightByZero(byte[] array, int padding)
+        {
+            byte[] temp = new byte[array.Length + padding];
+            int index = temp.Length - 1;
+            for (int i = array.Length - 1; i >= 0; i--)
+            {
+                temp[index] = array[i];
+                index--;
+            }
+            return temp;
+        }
+
+        static private byte[] paddingLeftByZero(byte[] array, int arrLength)
+        {
+            int padding = arrLength - array.Length;
+            if (padding <= 0)
+                return array;
+
+            byte[] temp = new byte[array.Length + padding];
+            for (int i = 0; i < array.Length; i++)
+            {
+                temp[i] = array[i];
+            }
+            return temp;
+        }
+
+        static private byte[] sum(byte[] A, byte[] B)
+        {
+            A = paddingLeftByZero(A, B.Length);
+            B = paddingLeftByZero(B, A.Length);
+
+            byte[] temp = new byte[A.Length + 2];
+            int carry = 0;
+            int i;
+            for (i = 0; i < A.Length + 1; i++)
+            {
+                int sum;
+                if (i < A.Length)
+                    sum = A[i] + B[i] + carry;
                 else
-                {
-                    temp[i] = X[i];
-                }
+                    sum = carry;
+                carry = (sum > 9) ? sum / 10 : 0;
+                temp[i] = (byte)(sum % 10);
+            }
+
+            temp = removeUnwantedZeros(temp);
+            return temp;
+        }
+
+        static private byte[] multiplyOneElementArray(ulong x, ulong y)
+        {
+            int size = 0;
+            ulong mul = x * y;
+            ulong muTemp = mul;
+
+            // get mul Length
+            while (muTemp != 0)
+            {
+                muTemp = muTemp / 10;
+                size++;
+            }
+
+            size = (size > 0) ? size : 1;
+            byte[] temp = new byte[size];
+            int i = 0;
+            while (mul != 0 && i < size)
+            {
+                temp[i] = (byte)(mul % 10);
+                mul = mul / 10;
+                i++;
             }
             return temp;
         }
 
-        static private byte[] multiplyByPowerdTen(byte[] X, int N, int power)
+        static private byte[] splitArray(byte[] array, int start, int end)
         {
-            byte[] temp = new byte[N+power];
-            for(int i = 0; i < N; i++)
+            int size = end - start;
+            byte[] splited = new byte[size];
+            for (int i = 0; i < size; i++)
             {
-                temp[i] = X[i];
+                if(start < array.Length)
+                splited[i] = array[start];
+                start++;
             }
-
-            return temp;
+            return splited;
         }
 
-        static private byte[] multiplyOneElementArray(byte[] X, byte[] y)
+        static private ulong parseULONG(byte[] array)
         {
-            byte[] temp;
-            int mul = X[0] * y[0];
-            if (mul < 10)
+            ulong num = 0;
+            for(int i = array.Length-1; i >= 0; i--)
             {
-                temp = new byte[1];
-                temp[0] = (byte)mul;
+                num = (num*10)+ array[i];
             }
-            else { 
-                temp = new byte[2];
-                short index = 1;
-                while(mul != 0)
-                {
-                    temp[index] = (byte)(mul % 10);
-                    index--;
-                    mul = (mul - mul%10)/10;
-                }
-            }
-            return temp;
+            return num;
         }
     }
 }
